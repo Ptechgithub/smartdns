@@ -386,6 +386,8 @@ struct dns_servers {
 	dns_server_type_t type;
 	long long set_mark;
 	unsigned int drop_packet_latency_ms;
+	int tcp_keepalive;
+	int subnet_all_query_types;
 	char skip_check_cert;
 	char spki[DNS_MAX_SPKI_LEN];
 	char hostname[DNS_MAX_CNAME_LEN];
@@ -674,6 +676,8 @@ extern ssize_t dns_conf_cache_max_memsize;
 extern struct dns_servers dns_conf_servers[DNS_MAX_SERVERS];
 extern int dns_conf_server_num;
 
+extern char dns_conf_exist_bootstrap_dns;
+
 /* proxy servers */
 extern struct dns_proxy_servers dns_conf_proxy_servers[PROXY_MAX_SERVERS];
 extern int dns_conf_proxy_server_num;
@@ -734,6 +738,7 @@ extern int dns_no_pidfile;
 extern int dns_no_daemon;
 extern int dns_restart_on_crash;
 extern size_t dns_socket_buff_size;
+extern int dns_ping_cap_force_enable;
 
 void dns_server_load_exit(void);
 

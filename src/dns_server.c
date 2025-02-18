@@ -91,6 +91,7 @@
 #define RECV_ERROR_FAIL (-1)
 #define RECV_ERROR_CLOSE (-2)
 #define RECV_ERROR_INVALID_PACKET (-3)
+#define RECV_ERROR_BAD_PATH (-4)
 
 typedef enum {
 	DNS_CONN_TYPE_UDP_SERVER = 0,
@@ -3128,10 +3129,10 @@ static void _dns_server_ping_result(struct ping_host_struct *ping_host, const ch
 			return;
 		}
 
-		if (is_ipv6_ready) {
-			if (error == EADDRNOTAVAIL || errno == EACCES) {
+		if (is_ipv6_ready == 1 && (error == EADDRNOTAVAIL || errno == EACCES)) {
+			if (is_private_addr_sockaddr(addr, addr_len) == 0) {
 				is_ipv6_ready = 0;
-				tlog(TLOG_ERROR, "IPV6 is not ready, disable all ipv6 feature, recheck after %ds",
+				tlog(TLOG_WARN, "IPV6 is not ready, disable all ipv6 feature, recheck after %ds",
 					 IPV6_READY_CHECK_TIME);
 			}
 		}
@@ -3582,26 +3583,29 @@ static int _dns_server_ip_rule_check(struct dns_request *request, struct dns_ip_
 		goto rule_not_found;
 	}
 
-	rule_flags = container_of(ip_rules->rules[IP_RULE_FLAGS], struct ip_rule_flags, head);
-	if (rule_flags != NULL) {
-		if (rule_flags->flags & IP_RULE_FLAG_BOGUS) {
-			request->rcode = DNS_RC_NXDOMAIN;
-			request->has_soa = 1;
-			request->force_soa = 1;
-			_dns_server_setup_soa(request);
-			goto nxdomain;
-		}
-
-		/* blacklist-ip */
-		if (rule_flags->flags & IP_RULE_FLAG_BLACKLIST) {
-			if (result_flag & DNSSERVER_FLAG_BLACKLIST_IP) {
-				goto match;
+	struct dns_ip_rule *rule = ip_rules->rules[IP_RULE_FLAGS];
+	if (rule != NULL) {
+		rule_flags = container_of(rule, struct ip_rule_flags, head);
+		if (rule_flags != NULL) {
+			if (rule_flags->flags & IP_RULE_FLAG_BOGUS) {
+				request->rcode = DNS_RC_NXDOMAIN;
+				request->has_soa = 1;
+				request->force_soa = 1;
+				_dns_server_setup_soa(request);
+				goto nxdomain;
 			}
-		}
 
-		/* ignore-ip */
-		if (rule_flags->flags & IP_RULE_FLAG_IP_IGNORE) {
-			goto skip;
+			/* blacklist-ip */
+			if (rule_flags->flags & IP_RULE_FLAG_BLACKLIST) {
+				if (result_flag & DNSSERVER_FLAG_BLACKLIST_IP) {
+					goto match;
+				}
+			}
+
+			/* ignore-ip */
+			if (rule_flags->flags & IP_RULE_FLAG_IP_IGNORE) {
+				goto skip;
+			}
 		}
 	}
 
@@ -4373,7 +4377,10 @@ static int _dns_server_get_answer(struct dns_server_post_context *context)
 					continue;
 				}
 
-				_dns_server_context_add_ip(context, addr_map->ip_addr);
+				if (addr_map != NULL) {
+					_dns_server_context_add_ip(context, addr_map->ip_addr);
+				}
+
 				if (request->has_ip == 1) {
 					continue;
 				}
@@ -4405,7 +4412,10 @@ static int _dns_server_get_answer(struct dns_server_post_context *context)
 					continue;
 				}
 
-				_dns_server_context_add_ip(context, addr_map->ip_addr);
+				if (addr_map != NULL) {
+					_dns_server_context_add_ip(context, addr_map->ip_addr);
+				}
+
 				if (request->has_ip == 1) {
 					continue;
 				}
@@ -6865,7 +6875,7 @@ static void _dns_server_setup_dns_group_name(struct dns_request *request, const 
 		group_name = temp_group_name;
 	}
 
-	if (request->dns_group_name[0] != '\0') {
+	if (request->dns_group_name[0] != '\0' && group_name == NULL) {
 		group_name = request->dns_group_name;
 	} else {
 		safe_strncpy(request->dns_group_name, group_name, sizeof(request->dns_group_name));
@@ -7844,6 +7854,7 @@ static int _dns_server_tcp_process_one_request(struct dns_server_conn_tcp_client
 			} else if (http_head_get_method(http_head) == HTTP_METHOD_GET) {
 				const char *path = http_head_get_url(http_head);
 				if (path == NULL || strncasecmp(path, "/dns-query", sizeof("/dns-query")) != 0) {
+					ret = RECV_ERROR_BAD_PATH;
 					tlog(TLOG_DEBUG, "path not supported, %s", path);
 					goto errout;
 				}
@@ -7946,9 +7957,12 @@ errout:
 		free(base64_query);
 	}
 
-	if ((ret == RECV_ERROR_FAIL || ret == RECV_ERROR_INVALID_PACKET) &&
-		tcpclient->head.type == DNS_CONN_TYPE_HTTPS_CLIENT) {
-		_dns_server_reply_http_error(tcpclient, 400, "Bad Request", "Bad Request");
+	if (tcpclient->head.type == DNS_CONN_TYPE_HTTPS_CLIENT) {
+		if (ret == RECV_ERROR_BAD_PATH) {
+			_dns_server_reply_http_error(tcpclient, 404, "Not Found", "Not Found");
+		} else if (ret == RECV_ERROR_FAIL || ret == RECV_ERROR_INVALID_PACKET) {
+			_dns_server_reply_http_error(tcpclient, 400, "Bad Request", "Bad Request");
+		}
 	}
 
 	return ret;

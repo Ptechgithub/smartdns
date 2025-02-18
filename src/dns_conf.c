@@ -92,7 +92,7 @@ struct dns_servers dns_conf_servers[DNS_MAX_SERVERS];
 char dns_conf_server_name[DNS_MAX_SERVER_NAME_LEN];
 int dns_conf_server_num;
 static int dns_conf_resolv_hostname = 1;
-static char dns_conf_exist_bootstrap_dns;
+char dns_conf_exist_bootstrap_dns;
 
 int dns_conf_has_icmp_check;
 int dns_conf_has_tcp_check;
@@ -105,6 +105,7 @@ struct dns_domain_check_orders dns_conf_default_check_orders = {
 		},
 };
 static int dns_has_cap_ping = 0;
+int dns_ping_cap_force_enable = 0;
 
 /* logging */
 int dns_conf_log_level = TLOG_ERROR;
@@ -909,6 +910,7 @@ static int _config_server(int argc, char *argv[], dns_server_type_t type, int de
 	unsigned int server_flag = 0;
 	unsigned char *spki = NULL;
 	int drop_packet_latency_ms = 0;
+	int tcp_keepalive = -1;
 	int is_bootstrap_dns = 0;
 	char host_ip[DNS_MAX_IPLEN] = {0};
 	int no_tls_host_name = 0;
@@ -939,6 +941,8 @@ static int _config_server(int argc, char *argv[], dns_server_type_t type, int de
 		{"host-name", required_argument, NULL, 260}, /* host name */
 		{"http-host", required_argument, NULL, 261}, /* http host */
 		{"tls-host-verify", required_argument, NULL, 262 }, /* verify tls hostname */
+		{"tcp-keepalive", required_argument, NULL, 263}, /* tcp keepalive */
+		{"subnet-all-query-types", no_argument, NULL, 264}, /* send subnent for all query types.*/
 		{NULL, no_argument, NULL, 0}
 	};
 	/* clang-format on */
@@ -962,6 +966,8 @@ static int _config_server(int argc, char *argv[], dns_server_type_t type, int de
 	server->proxyname[0] = '\0';
 	server->set_mark = -1;
 	server->drop_packet_latency_ms = drop_packet_latency_ms;
+	server->tcp_keepalive = tcp_keepalive;
+	server->subnet_all_query_types = 0;
 
 	if (parse_uri(ip, scheme, server->server, &port, server->path) != 0) {
 		return -1;
@@ -1100,6 +1106,14 @@ static int _config_server(int argc, char *argv[], dns_server_type_t type, int de
 			}
 			break;
 		}
+		case 263: {
+			server->tcp_keepalive = atoi(optarg);
+			break;
+		}
+		case 264: {
+			server->subnet_all_query_types = 1;
+			break;
+		}
 		default:
 			if (optind > optind_last) {
 				tlog(TLOG_WARN, "unknown server option: %s at '%s:%d'.", argv[optind - 1], conf_get_conf_file(),
@@ -1149,7 +1163,7 @@ static int _config_server(int argc, char *argv[], dns_server_type_t type, int de
 		}
 
 		if (server->httphost[0] == '\0') {
-			safe_strncpy(server->httphost, server->server, DNS_MAX_CNAME_LEN);
+			set_http_host(server->server, server->port, DEFAULT_DNS_HTTPS_PORT, server->httphost);
 		}
 	}
 
@@ -3024,7 +3038,6 @@ static int _config_bind_ip(int argc, char *argv[], DNS_BIND_TYPE type)
 	struct dns_bind_ip *bind_ip = NULL;
 	char *ip = NULL;
 	int opt = 0;
-	int optind = 0;
 	int optind_last = 0;
 	char group_name[DNS_GROUP_NAME_LEN];
 	const char *group = NULL;
@@ -4841,7 +4854,6 @@ static int _conf_domain_rule_no_ipalias(const char *domain)
 static int _conf_domain_rules(void *data, int argc, char *argv[])
 {
 	int opt = 0;
-	int optind = 0;
 	int optind_last = 0;
 	char domain[DNS_MAX_CONF_CNAME_LEN];
 	char *value = argv[1];
@@ -6378,6 +6390,10 @@ static int _dns_ping_cap_check(void)
 	}
 
 	if (has_ping == 1 || has_raw_cap == 1) {
+		dns_has_cap_ping = 1;
+	}
+
+	if (dns_ping_cap_force_enable) {
 		dns_has_cap_ping = 1;
 	}
 

@@ -289,7 +289,7 @@ TEST_F(SubNet, v4_server_subnet_txt)
 	});
 
 	server.Start(R"""(bind [::]:60053
-server 127.0.0.1:61053 -subnet 8.8.8.8/24
+server 127.0.0.1:61053 -subnet 8.8.8.8/24 -subnet-all-query-types
 dualstack-ip-selection no
 rr-ttl-min 0
 )""");
@@ -493,7 +493,7 @@ TEST_F(SubNet, per_server)
 			return smartdns::SERVER_REQUEST_OK;
 		}
 
-		if (request->qtype = DNS_T_AAAA) {
+		if (request->qtype == DNS_T_AAAA) {
 			struct dns_opt_ecs ecs;
 			struct dns_rrs *rrs = NULL;
 			int rr_count = 0;
