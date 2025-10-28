@@ -10,6 +10,14 @@ Support Raspberry Pi, openwrt, ASUS router, Windows and other devices.
 
 ## Usage
 
+## Install
+
+ ```
+ bash <(curl -fsSL https://raw.githubusercontent.com/Ptechgithub/smartdns/master/install.sh)
+ ```
+![26](https://github.com/Ptechgithub/configs/blob/main/media/26.jpg)
+
+
 Please visit website: [https://pymumu.github.io/smartdns](https://pymumu.github.io/smartdns/en)
 
 ## Software Show
