@@ -138,22 +138,6 @@ From the comparison, smartdns found the fastest IP address to visit www.baidu.co
 
 smartdns contains scripts for compiling packages, supports compiling luci, debian, openwrt, optware installation packages, and can execute `package/build-pkg.sh` compilation.
 
-## [Donate](#donate)  
-
-If you feel that this project is helpful to you, please donate to us so that the project can continue to develop and be more perfect.
-
-### PayPal
-
-[![Support via PayPal](https://cdn.rawgit.com/twolfson/paypal-github-button/1.0.0/dist/button.svg)](https://paypal.me/PengNick/)
-
-### Alipay
-
-![alipay](doc/alipay_donate.jpg)
-
-### Wechat
-  
-![wechat](doc/wechat_donate.jpg)
-
 ## Open Source License
 
 Smartdns is licensed to the public under the GPL V3 License.
